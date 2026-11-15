@@ -132,6 +132,11 @@ class GatewayRouter:
         for candidate in candidates:
             outbound = dict(payload)
             outbound["model"] = candidate.model
+            # Gemini 3 Flash may spend the output budget on internal reasoning
+            # unless reasoning effort is explicitly disabled. Respect caller
+            # overrides, but default Google requests to a text-first response.
+            if candidate.slug == "google" and "reasoning_effort" not in outbound:
+                outbound["reasoning_effort"] = "none"
             url = f"{candidate.base_url}/chat/completions"
             started = time.perf_counter()
             client = httpx.AsyncClient(timeout=httpx.Timeout(REQUEST_TIMEOUT_SECONDS, connect=15), follow_redirects=True)

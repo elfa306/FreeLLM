@@ -26,7 +26,7 @@ def _p(slug, name, base_url, key_url, credential_fields, models, description="",
 BUILTIN_PROVIDERS = [
     _p("aion", "Aion Labs", "https://api.aionlabs.ai/v1", "https://www.aionlabs.ai/app/api-keys/", [{"name":"api_key","label":"API Key","secret":True,"required":True}], ["aion-labs/aion-2.0","aion-labs/aion-rp-llama-3.1-8b","aion-labs/aion-3.0","aion-labs/aion-3.0-mini"], "Permanent free tier; specialized models."),
     _p("cohere", "Cohere", "https://api.cohere.ai/compatibility/v1", "https://dashboard.cohere.com/api-keys", [{"name":"api_key","label":"API Key","secret":True,"required":True}], ["command-a-plus-05-2026","command-a-03-2025","command-r-plus-08-2024","command-r-08-2024","command-r7b-12-2024","command-a-reasoning-08-2025","command-a-translate-08-2025","command-a-vision-07-2025","command-r7b-arabic-02-2025","c4ai-aya-expanse-32b","c4ai-aya-vision-32b"], "Cohere OpenAI Compatibility API."),
-    _p("google", "Google Gemini", "https://generativelanguage.googleapis.com/v1beta/openai", "https://aistudio.google.com/app/apikey", [{"name":"api_key","label":"Gemini API Key","secret":True,"required":True}], ["gemini-3.7-flash","gemini-3.6-flash","gemini-3.5-flash","gemini-3.5-flash-lite","gemini-3.1-flash-lite","gemini-2.5-flash","gemini-2.5-flash-lite","gemini-2.5-pro","gemma-4-31b-it","gemma-4-26b-a4b-it"], "Gemini OpenAI compatibility endpoint."),
+    _p("google", "Google Gemini", "https://generativelanguage.googleapis.com/v1beta/openai", "https://aistudio.google.com/app/apikey", [{"name":"api_key","label":"Gemini API Key","secret":True,"required":True}], ["gemini-3.6-flash","gemini-3.7-flash","gemini-3.5-flash","gemini-3.5-flash-lite","gemini-3.1-flash-lite","gemini-2.5-flash","gemini-2.5-flash-lite","gemini-2.5-pro","gemma-4-31b-it","gemma-4-26b-a4b-it"], "Gemini OpenAI compatibility endpoint."),
     _p("mistral", "Mistral AI", "https://api.mistral.ai/v1", "https://console.mistral.ai/api-keys", [{"name":"api_key","label":"API Key","secret":True,"required":True}], ["mistral-medium-3-5","mistral-small-2603","mistral-large-2512","ministral-8b-2512","codestral-2508","ministral-3b-2512","ministral-14b-2512"]),
     _p("zai", "Z AI (Zhipu AI)", "https://open.bigmodel.cn/api/paas/v4", "https://open.bigmodel.cn/usercenter/apikeys", [{"name":"api_key","label":"API Key","secret":True,"required":True}], ["glm-4.7-flash","glm-4.5-flash","glm-4.6v-flash"]),
     _p("cloudflare", "Cloudflare Workers AI", "https://api.cloudflare.com/client/v4/accounts/{account_id}/ai/v1", "https://dash.cloudflare.com/profile/api-tokens", [{"name":"account_id","label":"Account ID","secret":False,"required":True},{"name":"api_key","label":"API Token","secret":True,"required":True}], ["@cf/meta/llama-3.3-70b-instruct-fp8-fast","@cf/meta/llama-4-scout-17b-16e-instruct","@cf/openai/gpt-oss-120b","@cf/google/gemma-4-26b-a4b-it","@cf/zai-org/glm-4.7-flash","@cf/mistralai/mistral-small-3.1-24b-instruct","@cf/deepseek-ai/deepseek-r1-distill-qwen-32b"], "10,000 neurons/day free tier."),
@@ -84,6 +84,20 @@ def catalog() -> list[dict]:
             cached_details = cached[provider["slug"]]
             item["model_details"] = cached_details
             item["models"] = [m["id"] for m in cached_details]
+
+            # Prefer the Gemini Flash model verified with JSON mode in this
+            # gateway. Keep the remaining upstream catalog entries available.
+            if provider["slug"] == "google":
+                preferred_model = "gemini-3.6-flash"
+                details_by_id = {model["id"]: model for model in cached_details}
+                item["models"] = [preferred_model] + [
+                    model_id for model_id in item["models"]
+                    if model_id != preferred_model
+                ]
+                item["model_details"] = [
+                    details_by_id.get(model_id, {"id": model_id, "name": model_id})
+                    for model_id in item["models"]
+                ]
 
             # Keep the five manually curated OpenRouter free routes available
             # even when an upstream catalog sync does not list them.

@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import time
 from dataclasses import dataclass
 from typing import Any, AsyncIterator
@@ -12,6 +13,9 @@ from .catalog import catalog, model_kind, provider_by_slug
 from .config import COOLDOWN_SECONDS, REQUEST_TIMEOUT_SECONDS
 from .security import decrypt_json
 from .storage import Storage
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass
@@ -171,10 +175,23 @@ class GatewayRouter:
                 if "::" in requested_model:
                     break
             except Exception as exc:
+                # Log the traceback without logging request headers or credentials.
+                # Some httpx exceptions (for example ReadTimeout) have an empty str().
+                logger.exception(
+                    "Upstream chat request failed (provider=%s, model=%s)",
+                    candidate.slug,
+                    candidate.model,
+                )
                 await client.aclose()
-                error = f"{type(exc).__name__}: {exc}"
+                error_type = type(exc).__name__
+                error_message = str(exc).strip() or "No additional exception message."
+                error = f"{error_type}: {error_message}"
                 self.storage.record_failure(candidate.slug, error, int(time.time()) + 15)
-                errors.append({"provider": candidate.slug, "error": str(exc)[:300]})
+                errors.append({
+                    "provider": candidate.slug,
+                    "error_type": error_type,
+                    "error": error_message[:300],
+                })
                 if "::" in requested_model:
                     break
 
@@ -202,5 +219,13 @@ class GatewayRouter:
             self.storage.record_failure(slug, f"Test HTTP {response.status_code}: {response.text[:500]}")
             return {"ok": False, "status": "failed", "http_status": response.status_code, "message": response.text[:300]}
         except Exception as exc:
-            self.storage.record_failure(slug, f"Test error: {exc}")
-            return {"ok": False, "status": "failed", "message": str(exc)}
+            logger.exception("Provider connection test failed (provider=%s)", slug)
+            error_type = type(exc).__name__
+            error_message = str(exc).strip() or "No additional exception message."
+            self.storage.record_failure(slug, f"Test error: {error_type}: {error_message}")
+            return {
+                "ok": False,
+                "status": "failed",
+                "error_type": error_type,
+                "message": error_message,
+            }

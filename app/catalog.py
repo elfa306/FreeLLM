@@ -37,7 +37,7 @@ BUILTIN_PROVIDERS = [
     _p("modelscope", "ModelScope", "https://api-inference.modelscope.cn/v1", "https://modelscope.cn/my/myaccesstoken", [{"name":"api_key","label":"Access Token","secret":True,"required":True}], ["Qwen/Qwen3.5-35B-A3B","Qwen/Qwen3.5-27B"]),
     _p("nvidia", "NVIDIA NIM", "https://integrate.api.nvidia.com/v1", "https://build.nvidia.com/explore/discover", [{"name":"api_key","label":"NVIDIA API Key","secret":True,"required":True}], ["nvidia/nemotron-3-super-120b-a12b","nvidia/nemotron-3-nano-30b-a3b","nvidia/llama-3.1-nemotron-ultra-253b-v1","meta/llama-3.3-70b-instruct","mistralai/mistral-nemotron","google/gemma-4-31b-it","mistralai/mistral-large-2-instruct","minimaxai/minimax-m3","nvidia/nemotron-3-ultra-550b-a55b","openai/gpt-oss-120b","openai/gpt-oss-20b"]),
     _p("ollama", "Ollama Cloud", "https://ollama.com/v1", "https://ollama.com/settings/keys", [{"name":"api_key","label":"API Key","secret":True,"required":True}], ["deepseek-v4-pro","deepseek-v4-flash","minimax-m3","kimi-k3","gpt-oss:120b","gpt-oss:20b","nemotron-3-ultra","mistral-large-3:675b","qwen3.5:397b"]),
-    _p("openrouter", "OpenRouter", "https://openrouter.ai/api/v1", "https://openrouter.ai/keys", [{"name":"api_key","label":"API Key","secret":True,"required":True}], ["nvidia/nemotron-3-super-120b-a12b:free","openai/gpt-oss-20b:free","cohere/north-mini-code:free","google/gemma-4-26b-a4b-it:free","google/gemma-4-31b-it:free","inclusionai/ling-3.0-flash:free","nvidia/nemotron-3-nano-30b-a3b:free","nvidia/nemotron-nano-9b-v2:free","nvidia/nemotron-nano-12b-v2-vl:free","poolside/laguna-s-2.1:free","poolside/laguna-xs-2.1:free"]),
+    _p("openrouter", "OpenRouter", "https://openrouter.ai/api/v1", "https://openrouter.ai/keys", [{"name":"api_key","label":"API Key","secret":True,"required":True}], ["inclusionai/ling-3.2-flash:free","particle-ai/particle-1:free","baidu/ernie-5.5-flash-preview:free","thinkingmachines/inkling-2-small:free","recursive/flint-v1.0:free","nvidia/nemotron-3-super-120b-a12b:free","openai/gpt-oss-20b:free","cohere/north-mini-code:free","google/gemma-4-26b-a4b-it:free","google/gemma-4-31b-it:free","inclusionai/ling-3.0-flash:free","nvidia/nemotron-3-nano-30b-a3b:free","nvidia/nemotron-nano-9b-v2:free","nvidia/nemotron-nano-12b-v2-vl:free","poolside/laguna-s-2.1:free","poolside/laguna-xs-2.1:free"]),
     _p("ovh", "OVHcloud AI Endpoints", "https://oai.endpoints.kepler.ai.cloud.ovh.net/v1", "https://www.ovhcloud.com/en/public-cloud/ai-endpoints/catalog/", [{"name":"api_key","label":"API Key (optional)","secret":True,"required":False}], ["Qwen3.5-397B-A17B","gpt-oss-120b","gpt-oss-20b","Meta-Llama-3_3-70B-Instruct","Qwen3.6-27B","Qwen3.5-9B","Qwen3-32B","Qwen3-Coder-30B-A3B-Instruct","Qwen2.5-VL-72B-Instruct","Mistral-Small-3.2-24B-Instruct-2506","Mistral-Nemo-Instruct-2407","Mistral-7B-Instruct-v0.3"], "Anonymous free tier is available.", True),
     _p("siliconflow", "SiliconFlow", "https://api.siliconflow.cn/v1", "https://cloud.siliconflow.cn/account/ak", [{"name":"api_key","label":"API Key","secret":True,"required":True}], ["Qwen/Qwen3-8B"]),
 ]
@@ -81,8 +81,30 @@ def catalog() -> list[dict]:
     for provider in BUILTIN_PROVIDERS:
         item = dict(provider)
         if provider["slug"] in cached:
-            item["model_details"] = cached[provider["slug"]]
-            item["models"] = [m["id"] for m in cached[provider["slug"]]]
+            cached_details = cached[provider["slug"]]
+            item["model_details"] = cached_details
+            item["models"] = [m["id"] for m in cached_details]
+
+            # Keep the five manually curated OpenRouter free routes available
+            # even when an upstream catalog sync does not list them.
+            if provider["slug"] == "openrouter":
+                pinned_models = [
+                    "inclusionai/ling-3.2-flash:free",
+                    "particle-ai/particle-1:free",
+                    "baidu/ernie-5.5-flash-preview:free",
+                    "thinkingmachines/inkling-2-small:free",
+                    "recursive/flint-v1.0:free",
+                ]
+                details_by_id = {model["id"]: model for model in cached_details}
+                merged_ids = pinned_models + [
+                    model_id for model_id in item["models"]
+                    if model_id not in pinned_models
+                ]
+                item["models"] = merged_ids
+                item["model_details"] = [
+                    details_by_id.get(model_id, {"id": model_id, "name": model_id})
+                    for model_id in merged_ids
+                ]
         else:
             item["model_details"] = [{"id": m, "name": m} for m in provider["models"]]
         result.append(item)
